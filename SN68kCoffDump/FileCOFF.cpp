@@ -97,6 +97,9 @@ void FileCOFF::Serialise(Stream& stream)
 					//If a line number section header
 					if(lineNumberEntry.sectionMarker <= 0)
 					{
+						//Get symbol
+						lineNumberEntry.symbol = &m_symbols[lineNumberEntry.symbolTableIndex];
+
 						//Add new section
 						m_lineNumberSectionHeaders.push_back(lineNumberEntry);
 					}
@@ -105,6 +108,7 @@ void FileCOFF::Serialise(Stream& stream)
 						//Set line number section
 						lineNumberEntry.lineNumberSectionIdx = m_lineNumberSectionHeaders.size() - 1;
 
+						//Get symbol
 						LineNumberEntry& lineNumberSectionHeader = m_lineNumberSectionHeaders[lineNumberEntry.lineNumberSectionIdx];
 						lineNumberEntry.symbol = &m_symbols[lineNumberSectionHeader.symbolTableIndex];
 
