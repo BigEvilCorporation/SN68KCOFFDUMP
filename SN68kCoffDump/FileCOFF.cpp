@@ -6,12 +6,15 @@
 
 FileCOFF::FileCOFF()
 {
-
+	m_stringTableRaw = NULL;
 }
 
 FileCOFF::~FileCOFF()
 {
-
+	if(m_stringTableRaw)
+	{
+		delete m_stringTableRaw;
+	}
 }
 
 void FileCOFF::Serialise(Stream& stream)
@@ -35,6 +38,86 @@ void FileCOFF::Serialise(Stream& stream)
 	for(int i = 0; i < m_fileHeader.numSections; i++)
 	{
 		stream.Serialise(m_sectionHeaders[i]);
+	}
+
+	if(stream.GetDirection() == Stream::STREAM_IN)
+	{
+		//Allocate symbol table
+		m_symbols.resize(m_fileHeader.numSymbols);
+
+		//Seek to symbol table
+		stream.Seek(m_fileHeader.symbolTableOffset, Stream::SEEK_START);
+	}
+
+	//Serialise symbol table
+	for(int i = 0; i < m_fileHeader.numSymbols; i++)
+	{
+		stream.Serialise(m_symbols[i]);
+	}
+
+	//Serialise string table size
+	u32 stringTableSizeBytes;
+	stream.Serialise(stringTableSizeBytes);
+
+	//Allocate string table
+	if(stream.GetDirection() == Stream::STREAM_IN)
+	{
+		m_stringTableRaw = new u8[stringTableSizeBytes];
+	}
+
+	//Serialise string table
+	stream.Serialise(m_stringTableRaw, stringTableSizeBytes);
+
+	//Resolve symbol strings
+	for(int i = 0; i < m_fileHeader.numSymbols; i++)
+	{
+		if(m_symbols[i].stringTableOffset != -1)
+		{
+			m_symbols[i].name = (char*)m_stringTableRaw + (m_symbols[i].stringTableOffset - sizeof(u32));
+		}
+	}
+
+	//Serialise line number sections
+	for(int i = 0; i < m_fileHeader.numSections; i++)
+	{
+		if(m_sectionHeaders[i].numLineNumberTableEntries > 0)
+		{
+			if(stream.GetDirection() == Stream::STREAM_IN)
+			{
+				//Seek to line number section start
+				stream.Seek(m_sectionHeaders[i].lineNumberTableOffset, Stream::SEEK_START);
+
+				//Read all entries
+				for(int j = 0; j < m_sectionHeaders[i].numLineNumberTableEntries; j++)
+				{
+					//Serialise entry
+					LineNumberEntry lineNumberEntry;
+					stream.Serialise(lineNumberEntry);
+
+					//If a line number section header
+					if(lineNumberEntry.sectionMarker <= 0)
+					{
+						//Add new section
+						m_lineNumberSectionHeaders.push_back(lineNumberEntry);
+					}
+					else
+					{
+						//Set line number section
+						lineNumberEntry.lineNumberSectionIdx = m_lineNumberSectionHeaders.size() - 1;
+
+						LineNumberEntry& lineNumberSectionHeader = m_lineNumberSectionHeaders[lineNumberEntry.lineNumberSectionIdx];
+						lineNumberEntry.symbol = &m_symbols[lineNumberSectionHeader.symbolTableIndex];
+
+						//Insert into address map
+						m_lineNumberAddressMap[lineNumberEntry.physicalAddress] = lineNumberEntry;
+					}
+				}
+			}
+			else
+			{
+				//TODO: Stream out
+			}
+		}
 	}
 }
 
@@ -158,4 +241,37 @@ void FileCOFF::SectionHeader::Dump(std::stringstream& stream)
 	stream << "Flags: 0x" << std::hex << flags << std::dec << " (" << flagsString.c_str() << ")" << std::endl;
 
 	stream << std::endl;
+}
+
+void FileCOFF::LineNumberEntry::Serialise(Stream& stream)
+{
+	stream.Serialise(physicalAddress);
+	stream.Serialise(lineNumber);
+}
+
+void FileCOFF::Symbol::Serialise(Stream& stream)
+{
+	SymbolNameStringDef symbolStringDef;
+	stream.Serialise((u8*)symbolStringDef.name, COFF_SECTION_NAME_SIZE);
+
+	//NULL terminate string
+	symbolStringDef.name[COFF_SECTION_NAME_SIZE] = 0;
+
+	if(symbolStringDef.freeStringSpace == 0)
+	{
+		//Name doesn't fit, get string table offset
+		stringTableOffset = symbolStringDef.stringTableOffset;
+	}
+	else
+	{
+		//Name fits here
+		name = symbolStringDef.name;
+		stringTableOffset = (u32)-1;
+	}
+
+	stream.Serialise(value);
+	stream.Serialise(sectionIndex);
+	stream.Serialise(symbolType);
+	stream.Serialise(storageClass);
+	stream.Serialise(auxCount);
 }
