@@ -1,5 +1,6 @@
 
 #include <iostream>
+#include <algorithm>
 
 #include "FileCOFF.h"
 #include "timeutils.h"
@@ -11,9 +12,17 @@ FileCOFF::FileCOFF()
 
 FileCOFF::~FileCOFF()
 {
+	for(int i = 0; i < m_fileHeader.numSections; i++)
+	{
+		if(m_sectionHeaders[i].data)
+		{
+			delete [] m_sectionHeaders[i].data;
+		}
+	}
+
 	if(m_stringTableRaw)
 	{
-		delete m_stringTableRaw;
+		delete [] m_stringTableRaw;
 	}
 }
 
@@ -77,6 +86,39 @@ void FileCOFF::Serialise(Stream& stream)
 		}
 	}
 
+	//Copy to sorted table
+	m_sortedSymbols = m_symbols;
+	std::sort(m_sortedSymbols.begin(), m_sortedSymbols.end());
+
+	//Read section data
+	for(int i = 0; i < m_fileHeader.numSections; i++)
+	{
+		if(m_sectionHeaders[i].sectiondataOffset > 0 && m_sectionHeaders[i].size > 0)
+		{
+			//Alloc data
+			m_sectionHeaders[i].data = new u8[m_sectionHeaders[i].size];
+
+			//Seek to data start
+			stream.Seek(m_sectionHeaders[i].sectiondataOffset, Stream::SEEK_START);
+
+			//Read data
+			stream.Serialise(m_sectionHeaders[i].data, m_sectionHeaders[i].size);
+		}
+	}
+
+	//Build filename table
+	u32 lastStringPos = 0;
+	const char* filenameData = (const char*)m_sectionHeaders[COFF_SECTION_FILENAMES].data;
+	
+	for(int i = 0; i < m_sectionHeaders[COFF_SECTION_FILENAMES].size; i++)
+	{
+		if(filenameData[i] == 0)
+		{
+			m_filenameTable.push_back((const char*)(filenameData + lastStringPos));
+			lastStringPos = i+1;
+		}
+	}
+
 	//Serialise line number sections
 	for(int i = 0; i < m_fileHeader.numSections; i++)
 	{
@@ -86,6 +128,8 @@ void FileCOFF::Serialise(Stream& stream)
 			{
 				//Seek to line number section start
 				stream.Seek(m_sectionHeaders[i].lineNumberTableOffset, Stream::SEEK_START);
+
+				
 
 				//Read all entries
 				for(int j = 0; j < m_sectionHeaders[i].numLineNumberTableEntries; j++)
@@ -97,8 +141,8 @@ void FileCOFF::Serialise(Stream& stream)
 					//If a line number section header
 					if(lineNumberEntry.sectionMarker <= 0)
 					{
-						//Get symbol
-						lineNumberEntry.symbol = &m_symbols[lineNumberEntry.symbolTableIndex];
+						//Filename table is 1-based
+						lineNumberEntry.filenameIndex -= 1;
 
 						//Add new section
 						m_lineNumberSectionHeaders.push_back(lineNumberEntry);
@@ -108,9 +152,9 @@ void FileCOFF::Serialise(Stream& stream)
 						//Set line number section
 						lineNumberEntry.lineNumberSectionIdx = m_lineNumberSectionHeaders.size() - 1;
 
-						//Get symbol
+						//Get filename
 						LineNumberEntry& lineNumberSectionHeader = m_lineNumberSectionHeaders[lineNumberEntry.lineNumberSectionIdx];
-						lineNumberEntry.symbol = &m_symbols[lineNumberSectionHeader.symbolTableIndex];
+						lineNumberEntry.filename = &m_filenameTable[lineNumberSectionHeader.filenameIndex];
 
 						//Insert into address map
 						m_lineNumberAddressMap[lineNumberEntry.physicalAddress] = lineNumberEntry;
@@ -143,7 +187,7 @@ void FileCOFF::Dump(std::stringstream& stream)
 
 void FileCOFF::FileHeader::Serialise(Stream& stream)
 {
-	stream.Serialise(fileVersion);
+	stream.Serialise(machineType);
 	stream.Serialise(numSections);
 	stream.Serialise(timeDate);
 	stream.Serialise(symbolTableOffset);
@@ -160,7 +204,7 @@ void FileCOFF::FileHeader::Dump(std::stringstream& stream)
 	stream << "-------------------------------------" << std::endl;
 	stream << "HEADER" << std::endl;
 	stream << "-------------------------------------" << std::endl;
-	stream << "COFF filetype: 0x" << std::hex << fileVersion << std::dec << std::endl;
+	stream << "COFF machine type: 0x" << std::hex << machineType << std::dec << std::endl;
 	stream << "Num sections: " << numSections << std::endl;
 	stream << "Timestamp: " << timeStamp.wHour << ":" << timeStamp.wMinute << ":" << timeStamp.wSecond << " " << timeStamp.wDay << "/" << timeStamp.wMonth << "/" << timeStamp.wYear << std::endl;
 	stream << "Symbol table offset: " << symbolTableOffset << std::endl;

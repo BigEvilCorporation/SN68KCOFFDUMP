@@ -8,8 +8,14 @@
 #include "atoms.h"
 #include "archive.h"
 
-#define COFF_VERSION_SNASM2		0x150
+#define COFF_MACHINE_68000		0x150
 #define COFF_SECTION_NAME_SIZE	8
+
+//SNASM2 hard coded section idxs
+#define COFF_SECTION_FILENAMES	0
+#define COFF_SECTION_GLOBALS	1
+#define COFF_SECTION_ROM_DATA	2
+#define COFF_SECTION_COUNT		3
 
 //Section header flags
 #define COFF_SECTION_FLAG_DUMMY	0x00000001
@@ -33,7 +39,7 @@ public:
 		void Serialise(Stream& stream);
 		void Dump(std::stringstream& stream);
 
-		u16 fileVersion;
+		u16 machineType;
 		u16 numSections;
 		u32 timeDate;
 		u32 symbolTableOffset;
@@ -59,6 +65,11 @@ public:
 
 	struct SectionHeader
 	{
+		SectionHeader()
+		{
+			data = NULL;
+		}
+
 		void Serialise(Stream& stream);
 		void Dump(std::stringstream& stream);
 
@@ -72,11 +83,14 @@ public:
 		u16 numRelocationEntries;
 		u16 numLineNumberTableEntries;
 		u32 flags;
+
+		u8* data;
 	};
 
 	struct Symbol
 	{
 		void Serialise(Stream& stream);
+		bool operator < (const Symbol& rhs) const { return value < rhs.value; }
 
 		std::string name;
 		u32 stringTableOffset;
@@ -105,7 +119,7 @@ public:
 			physicalAddress = 0;
 			sectionMarker = 0;
 			lineNumberSectionIdx = 0;
-			symbol = NULL;
+			filename = NULL;
 		}
 
 		void Serialise(Stream& stream);
@@ -113,7 +127,7 @@ public:
 		union
 		{
 			u32 physicalAddress;
-			u32 symbolTableIndex;
+			u32 filenameIndex;
 		};
 
 		union
@@ -123,7 +137,7 @@ public:
 		};
 
 		u32 lineNumberSectionIdx;
-		Symbol* symbol;
+		std::string* filename;
 	};
 
 	FileHeader m_fileHeader;
@@ -132,5 +146,7 @@ public:
 	std::vector<LineNumberEntry> m_lineNumberSectionHeaders;
 	std::map<u32, LineNumberEntry> m_lineNumberAddressMap;
 	std::vector<Symbol> m_symbols;
+	std::vector<Symbol> m_sortedSymbols;
+	std::vector<std::string> m_filenameTable;
 	u8* m_stringTableRaw;
 };

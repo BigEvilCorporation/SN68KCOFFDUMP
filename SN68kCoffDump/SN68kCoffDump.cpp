@@ -5,6 +5,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <algorithm>
 
 #include "stdafx.h"
 #include "FileCOFF.h"
@@ -16,6 +17,7 @@ void PrintUsage(std::stringstream& stream)
 	stream << "Options:" << std::endl;
 	stream << "\t-summary\t\tPrints COFF summary" << std::endl;
 	stream << "\t-symbols\t\tPrints symbol table" << std::endl;
+	stream << "\t-extractrom [filename]\tExtracts ROM file" << std::endl;
 	stream << "\t-addr2line [address]\tPrints file/line and symbol from physical address" << std::endl;
 }
 
@@ -23,19 +25,26 @@ int _tmain(int argc, _TCHAR* argv[])
 {
 	std::stringstream textStream;
 
+	textStream << "-------------------------------------" << std::endl;
 	textStream << "SNASM2 68000 COFF File Info Dump Tool" << std::endl;
-	textStream << "23/Jan/2016" << std::endl;
-	textStream << "Matt Phillips, Big Evil Corporation" << std::endl << std::endl;
+	textStream << "-------------------------------------" << std::endl;
+	textStream << "Release 0.1a, 23/Jan/2016" << std::endl;
+	textStream << "Matt Phillips, Big Evil Corporation" << std::endl;
+	textStream << "http://www.bigevilcorporation.co.uk" << std::endl;
+	textStream << "-------------------------------------" << std::endl << std::endl;
 
 	//Args
 	std::wstring filename;
 	bool argDumpSummary = false;
 	bool argDumpSymbols = false;
+	bool argExtractROM = false;
+	std::wstring argROMFilename;
 	bool argAddressToLine = false;
 	u32  argAddress = 0;
+	bool argError = false;
 
 	//Need at least 3 args (exe + input filename + operation)
-	if(argc > 3)
+	if(argc > 2)
 	{
 		//Input filename
 		filename = argv[1];
@@ -45,9 +54,19 @@ int _tmain(int argc, _TCHAR* argv[])
 		{
 			if(_wcsicmp(argv[i], L"-summary") == 0)
 				argDumpSummary = true;
-			if(_wcsicmp(argv[i], L"-symbols") == 0)
+			else if(_wcsicmp(argv[i], L"-symbols") == 0)
 				argDumpSymbols = true;
-			if(_wcsicmp(argv[i], L"-addr2line") == 0)
+			else if(_wcsicmp(argv[i], L"-extractrom") == 0)
+			{
+				//Need filename arg
+				if(i < (argc - 1))
+				{
+					i++;
+					argExtractROM = true;
+					argROMFilename = argv[i];
+				}
+			}
+			else if(_wcsicmp(argv[i], L"-addr2line") == 0)
 			{
 				//Need address arg
 				if(i < (argc-1))
@@ -57,11 +76,15 @@ int _tmain(int argc, _TCHAR* argv[])
 					argAddress = _wtoi(argv[i]);
 				}
 			}
+			else
+			{
+				argError = true;
+			}
 		}
 
-		if(!argDumpSummary && !argDumpSymbols && !argAddressToLine)
+		if(argError || (!argDumpSummary && !argDumpSymbols && !argAddressToLine && !argExtractROM))
 		{
-			//No op, print usage
+			//No operation specified, or arg error, print usage
 			PrintUsage(textStream);
 		}
 	}
@@ -71,7 +94,7 @@ int _tmain(int argc, _TCHAR* argv[])
 		PrintUsage(textStream);
 	}
 
-	if(filename.size() > 0)
+	if(filename.size() > 0 && !argError)
 	{
 		//Open file (at end)
 		std::ifstream file(filename, std::ios::in | std::ios::binary | std::ios::ate);
@@ -100,10 +123,16 @@ int _tmain(int argc, _TCHAR* argv[])
 			//Free buffer
 			delete data;
 
-			//Sanity check COFF format type
-			if(coffFile.m_fileHeader.fileVersion != COFF_VERSION_SNASM2)
+			//Sanity checks
+			if(coffFile.m_fileHeader.machineType != COFF_MACHINE_68000)
 			{
-				textStream << "Unknown COFF file format";
+				//Unsupported machine/processor type
+				textStream << "Unknown COFF machine/processor type, not a SNASM68K COFF";
+			}
+			else if(coffFile.m_sectionHeaders.size() != COFF_SECTION_COUNT)
+			{
+				//SNASM2 COFF has a fixed number of sections
+				textStream << "Unsupported section count, not a SNASM68K COFF";
 			}
 			else
 			{
@@ -120,9 +149,23 @@ int _tmain(int argc, _TCHAR* argv[])
 					textStream << "SYMBOLS" << std::endl;
 					textStream << "-------------------------------------" << std::endl;
 
-					for(int i = 0; i < coffFile.m_symbols.size(); i++)
+					for(int i = 0; i < coffFile.m_sortedSymbols.size(); i++)
 					{
-						textStream << coffFile.m_symbols[i].name.c_str() << " = 0x" << std::hex << coffFile.m_symbols[i].value << std::dec << std::endl;
+						textStream << "0x" << std::hex << coffFile.m_sortedSymbols[i].value << std::dec << "\t" << coffFile.m_sortedSymbols[i].name.c_str() << std::endl;
+					}
+				}
+
+				if(argExtractROM)
+				{
+					//Extract ROM
+					std::ofstream outFile(argROMFilename, std::ios::out | std::ios::binary);
+					if(outFile.is_open())
+					{
+						u8* romData = coffFile.m_sectionHeaders[COFF_SECTION_ROM_DATA].data;
+						u32 romSize = coffFile.m_sectionHeaders[COFF_SECTION_ROM_DATA].size;
+						
+						outFile.write((const char*)romData, romSize);
+						outFile.close();
 					}
 				}
 
@@ -137,10 +180,28 @@ int _tmain(int argc, _TCHAR* argv[])
 					}
 					else
 					{
-						//Line/symbol found
-						textStream << "Symbol at address 0x" << std::hex << argAddress << std::dec << std::endl;
-						textStream << "Name: " << it->second.symbol->name << std::endl;
+						//Line found, get nearest symbol
+						std::string nearestSymbol = "Not found";
+						FileCOFF::Symbol findSymbol;
+						findSymbol.value = argAddress;
+						auto symbolIt = std::lower_bound(coffFile.m_sortedSymbols.begin(), coffFile.m_sortedSymbols.end(), findSymbol);
+
+						textStream << "Address 0x" << std::hex << argAddress << std::dec << std::endl;
+						textStream << "Filename: " << it->second.filename->c_str() << std::endl;
 						textStream << "Line: " << it->second.lineNumber << std::endl;
+
+						if(symbolIt != coffFile.m_sortedSymbols.end())
+						{
+							//Get last symbol
+							symbolIt--;
+
+							textStream << "Nearest symbol name: " << symbolIt->name.c_str() << std::endl;
+							textStream << "Nearest symbol address: " << std::hex << symbolIt->value << std::dec << std::endl;
+						}
+						else
+						{
+							textStream << "Nearest symbol: Not found" << std::endl;
+						}
 					}
 				}
 			}
