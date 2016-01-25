@@ -3,7 +3,7 @@
 // ============================================================
 //   http://www.bigevilcorporation.co.uk
 // ============================================================
-//   sn68kcoffdump - A SNAMSM68K COFF file info dump utility
+//   sn68kcoffdump - A SNASM68K COFF file info dump utility
 // ============================================================
 
 #pragma once
