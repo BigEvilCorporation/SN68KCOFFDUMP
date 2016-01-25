@@ -1,3 +1,10 @@
+// ============================================================
+//   Matt Phillips (c) 2016 BIG EVIL CORPORATION
+// ============================================================
+//   http://www.bigevilcorporation.co.uk
+// ============================================================
+//   sn68kcoffdump - A SNAMSM68K COFF file info dump utility
+// ============================================================
 
 #include <iostream>
 #include <algorithm>

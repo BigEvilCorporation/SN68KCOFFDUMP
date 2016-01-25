@@ -1,5 +1,10 @@
-// SN68kCoffDump.cpp : Defines the entry point for the console application.
-//
+// ============================================================
+//   Matt Phillips (c) 2016 BIG EVIL CORPORATION
+// ============================================================
+//   http://www.bigevilcorporation.co.uk
+// ============================================================
+//   sn68kcoffdump - A SNAMSM68K COFF file info dump utility
+// ============================================================
 
 #include <iostream>
 #include <fstream>

@@ -14,6 +14,7 @@
     <ProjectGuid>{F75FFA5F-09D6-49A5-9AD5-3BE7BC98DF44}</ProjectGuid>
     <Keyword>Win32Proj</Keyword>
     <RootNamespace>SN68kCoffDump</RootNamespace>
+    <ProjectName>sn68kcoffdump</ProjectName>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -88,7 +89,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="FileCOFF.cpp" />
-    <ClCompile Include="SN68kCoffDump.cpp" />
+    <ClCompile Include="sn68kcoffdump.cpp" />
     <ClCompile Include="stdafx.cpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />

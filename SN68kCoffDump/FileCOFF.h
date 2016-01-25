@@ -1,3 +1,10 @@
+// ============================================================
+//   Matt Phillips (c) 2016 BIG EVIL CORPORATION
+// ============================================================
+//   http://www.bigevilcorporation.co.uk
+// ============================================================
+//   sn68kcoffdump - A SNAMSM68K COFF file info dump utility
+// ============================================================
 
 #pragma once
 
@@ -13,7 +20,7 @@
 
 //SNASM2 hard coded section idxs
 #define COFF_SECTION_FILENAMES	0
-#define COFF_SECTION_GLOBALS	1
+#define COFF_SECTION_DBG_DATA	1
 #define COFF_SECTION_ROM_DATA	2
 #define COFF_SECTION_COUNT		3
 
