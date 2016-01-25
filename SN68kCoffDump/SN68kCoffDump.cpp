@@ -18,7 +18,7 @@ void PrintUsage(std::stringstream& stream)
 	stream << "\t-summary\t\tPrints COFF summary" << std::endl;
 	stream << "\t-symbols\t\tPrints symbol table" << std::endl;
 	stream << "\t-extractrom [filename]\tExtracts ROM file" << std::endl;
-	stream << "\t-addr2line [address]\tPrints file/line and symbol from physical address" << std::endl;
+	stream << "\t-addr2line [hex address]\tPrints file/line and symbol from physical address" << std::endl;
 }
 
 int _tmain(int argc, _TCHAR* argv[])
@@ -34,11 +34,11 @@ int _tmain(int argc, _TCHAR* argv[])
 	textStream << "-------------------------------------" << std::endl << std::endl;
 
 	//Args
-	std::wstring filename;
+	std::string filename;
 	bool argDumpSummary = false;
 	bool argDumpSymbols = false;
 	bool argExtractROM = false;
-	std::wstring argROMFilename;
+	std::string argROMFilename;
 	bool argAddressToLine = false;
 	u32  argAddress = 0;
 	bool argError = false;
@@ -52,11 +52,11 @@ int _tmain(int argc, _TCHAR* argv[])
 		//Tokenise remaining arguments
 		for(int i = 2; i < argc; i++)
 		{
-			if(_wcsicmp(argv[i], L"-summary") == 0)
+			if(_stricmp(argv[i], "-summary") == 0)
 				argDumpSummary = true;
-			else if(_wcsicmp(argv[i], L"-symbols") == 0)
+			else if(_stricmp(argv[i], "-symbols") == 0)
 				argDumpSymbols = true;
-			else if(_wcsicmp(argv[i], L"-extractrom") == 0)
+			else if(_stricmp(argv[i], "-extractrom") == 0)
 			{
 				//Need filename arg
 				if(i < (argc - 1))
@@ -66,14 +66,14 @@ int _tmain(int argc, _TCHAR* argv[])
 					argROMFilename = argv[i];
 				}
 			}
-			else if(_wcsicmp(argv[i], L"-addr2line") == 0)
+			else if(_stricmp(argv[i], "-addr2line") == 0)
 			{
 				//Need address arg
 				if(i < (argc-1))
 				{
 					i++;
 					argAddressToLine = true;
-					argAddress = _wtoi(argv[i]);
+					argAddress = strtol(argv[i], NULL, 16);
 				}
 			}
 			else
@@ -166,6 +166,14 @@ int _tmain(int argc, _TCHAR* argv[])
 						
 						outFile.write((const char*)romData, romSize);
 						outFile.close();
+
+						textStream << "ROM extracted" << std::endl;
+						textStream << "Filename: " << argROMFilename.c_str() << std::endl;
+						textStream << "Size: " << romSize << " bytes" << std::endl;
+					}
+					else
+					{
+						textStream << "Error: Could not create file " << argROMFilename.c_str() << std::endl;
 					}
 				}
 
